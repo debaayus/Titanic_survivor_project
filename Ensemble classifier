@@ -1,0 +1,640 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "%matplotlib inline\n",
+    "\n",
+    "from collections import Counter\n",
+    "\n",
+    "from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, ExtraTreesClassifier, VotingClassifier\n",
+    "from sklearn.discriminant_analysis import LinearDiscriminantAnalysis\n",
+    "from sklearn.linear_model import LogisticRegression\n",
+    "from sklearn.neighbors import KNeighborsClassifier\n",
+    "from sklearn.tree import DecisionTreeClassifier\n",
+    "from sklearn.neural_network import MLPClassifier\n",
+    "from sklearn.svm import SVC\n",
+    "from sklearn.model_selection import GridSearchCV, cross_val_score, StratifiedKFold, learning_curve\n",
+    "from sklearn.preprocessing import StandardScaler\n",
+    "\n",
+    "sns.set(style='white', context='notebook', palette='deep')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train = pd.read_csv(\"./train.csv\")\n",
+    "test = pd.read_csv(\"./test.csv\")\n",
+    "IDtest = test[\"PassengerId\"]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train_len = len(train)\n",
+    "dataset =  pd.concat(objs=[train, test], axis=0).reset_index(drop=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Fare\"] = dataset[\"Fare\"].map(lambda i: np.log(i) if i > 0 else 0)\n",
+    "dataset[\"Fare\"] = dataset[\"Fare\"].fillna(dataset[\"Fare\"].median())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Embarked\"] = dataset[\"Embarked\"].fillna(\"S\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Sex\"] = dataset[\"Sex\"].map({\"male\": 0, \"female\":1})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/Users/IronMav/opt/anaconda3/lib/python3.7/site-packages/pandas/core/indexing.py:670: SettingWithCopyWarning: \n",
+      "A value is trying to be set on a copy of a slice from a DataFrame\n",
+      "\n",
+      "See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy\n",
+      "  self._setitem_with_indexer(indexer, value)\n"
+     ]
+    }
+   ],
+   "source": [
+    "index_NaN_age = list(dataset[\"Age\"][dataset[\"Age\"].isnull()].index)\n",
+    "\n",
+    "for i in index_NaN_age :\n",
+    "    age_med = dataset[\"Age\"].median()\n",
+    "    age_pred = dataset[\"Age\"][((dataset['SibSp'] == dataset.iloc[i][\"SibSp\"]) & (dataset['Parch'] == dataset.iloc[i][\"Parch\"]) & (dataset['Pclass'] == dataset.iloc[i][\"Pclass\"]))].median()\n",
+    "    if not np.isnan(age_pred) :\n",
+    "        dataset['Age'].iloc[i] = age_pred\n",
+    "    else :\n",
+    "        dataset['Age'].iloc[i] = age_med"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset_title = [i.split(\",\")[1].split(\".\")[0].strip() for i in dataset[\"Name\"]]\n",
+    "dataset[\"Title\"] = pd.Series(dataset_title)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Title\"] = dataset[\"Title\"].replace(['Lady', 'the Countess','Countess','Capt', 'Col','Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')\n",
+    "dataset[\"Title\"] = dataset[\"Title\"].map({\"Master\":0, \"Miss\":1, \"Ms\" : 1 , \"Mme\":1, \"Mlle\":1, \"Mrs\":1, \"Mr\":2, \"Rare\":3})\n",
+    "dataset[\"Title\"] = dataset[\"Title\"].astype(int)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset.drop(labels = [\"Name\"], axis = 1, inplace = True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Fsize\"] = dataset[\"SibSp\"] + dataset[\"Parch\"] + 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset['Single'] = dataset['Fsize'].map(lambda s: 1 if s == 1 else 0)\n",
+    "dataset['SmallF'] = dataset['Fsize'].map(lambda s: 1 if  s == 2  else 0)\n",
+    "dataset['MedF'] = dataset['Fsize'].map(lambda s: 1 if 3 <= s <= 4 else 0)\n",
+    "dataset['LargeF'] = dataset['Fsize'].map(lambda s: 1 if s >= 5 else 0)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset = pd.get_dummies(dataset, columns = [\"Title\"])\n",
+    "dataset = pd.get_dummies(dataset, columns = [\"Embarked\"], prefix=\"Em\")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Cabin\"] = pd.Series([i[0] if not pd.isnull(i) else 'X' for i in dataset['Cabin'] ])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset = pd.get_dummies(dataset, columns = [\"Cabin\"],prefix=\"Cabin\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "Ticket = []\n",
+    "for i in list(dataset.Ticket):\n",
+    "    if not i.isdigit() :\n",
+    "        Ticket.append(i.replace(\".\",\"\").replace(\"/\",\"\").strip().split(' ')[0]) #Take prefix\n",
+    "    else:\n",
+    "        Ticket.append(\"X\")\n",
+    "        \n",
+    "dataset[\"Ticket\"] = Ticket\n",
+    "dataset = pd.get_dummies(dataset, columns = [\"Ticket\"], prefix=\"T\")\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset[\"Pclass\"] = dataset[\"Pclass\"].astype(\"category\")\n",
+    "dataset = pd.get_dummies(dataset, columns = [\"Pclass\"],prefix=\"Pc\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset.drop(labels = [\"PassengerId\"], axis = 1, inplace = True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/Users/IronMav/opt/anaconda3/lib/python3.7/site-packages/pandas/core/frame.py:3997: SettingWithCopyWarning: \n",
+      "A value is trying to be set on a copy of a slice from a DataFrame\n",
+      "\n",
+      "See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy\n",
+      "  errors=errors,\n"
+     ]
+    }
+   ],
+   "source": [
+    "train = dataset[:train_len]\n",
+    "test = dataset[train_len:]\n",
+    "test.drop(labels=[\"Survived\"],axis = 1,inplace=True)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/Users/IronMav/opt/anaconda3/lib/python3.7/site-packages/ipykernel_launcher.py:1: SettingWithCopyWarning: \n",
+      "A value is trying to be set on a copy of a slice from a DataFrame.\n",
+      "Try using .loc[row_indexer,col_indexer] = value instead\n",
+      "\n",
+      "See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy\n",
+      "  \"\"\"Entry point for launching an IPython kernel.\n"
+     ]
+    }
+   ],
+   "source": [
+    "train[\"Survived\"] = train[\"Survived\"].astype(int)\n",
+    "\n",
+    "Y_train = train[\"Survived\"]\n",
+    "\n",
+    "X_train = train.drop(labels = [\"Survived\"],axis = 1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "scaler = StandardScaler()\n",
+    "scaler.fit(X_train)\n",
+    "X_train = scaler.transform(X_train)\n",
+    "test= scaler.transform(test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "kfold = StratifiedKFold(n_splits=10)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fitting 10 folds for each of 112 candidates, totalling 1120 fits\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Using backend LokyBackend with 4 concurrent workers.\n",
+      "[Parallel(n_jobs=4)]: Done  68 tasks      | elapsed:    2.4s\n",
+      "[Parallel(n_jobs=4)]: Done 1120 out of 1120 | elapsed:    8.8s finished\n"
+     ]
+    }
+   ],
+   "source": [
+    "DTC = DecisionTreeClassifier()\n",
+    "\n",
+    "adaDTC = AdaBoostClassifier(DTC, random_state=7)\n",
+    "\n",
+    "ada_param_grid = {\"base_estimator__criterion\" : [\"gini\", \"entropy\"],\n",
+    "              \"base_estimator__splitter\" :   [\"best\", \"random\"],\n",
+    "              \"algorithm\" : [\"SAMME\",\"SAMME.R\"],\n",
+    "              \"n_estimators\" :[1,2],\n",
+    "              \"learning_rate\":  [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3,1.5]}\n",
+    "\n",
+    "gsadaDTC = GridSearchCV(adaDTC,param_grid = ada_param_grid, cv=kfold, scoring=\"accuracy\", n_jobs= 4, verbose = 1)\n",
+    "\n",
+    "gsadaDTC.fit(X_train,Y_train)\n",
+    "\n",
+    "ada_best = gsadaDTC.best_estimator_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Using backend LokyBackend with 4 concurrent workers.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fitting 10 folds for each of 54 candidates, totalling 540 fits\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Done  42 tasks      | elapsed:    9.9s\n",
+      "[Parallel(n_jobs=4)]: Done 192 tasks      | elapsed:   32.1s\n",
+      "[Parallel(n_jobs=4)]: Done 442 tasks      | elapsed:  1.3min\n",
+      "[Parallel(n_jobs=4)]: Done 540 out of 540 | elapsed:  1.5min finished\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0.8316729088639201"
+      ]
+     },
+     "execution_count": 24,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "ExtC = ExtraTreesClassifier()\n",
+    "\n",
+    "\n",
+    "## Search grid for optimal parameters\n",
+    "ex_param_grid = {\"max_depth\": [None],\n",
+    "              \"max_features\": [1, 3, 10],\n",
+    "              \"min_samples_split\": [2, 3, 10],\n",
+    "              \"min_samples_leaf\": [1, 3, 10],\n",
+    "              \"bootstrap\": [False],\n",
+    "              \"n_estimators\" :[100,300],\n",
+    "              \"criterion\": [\"gini\"]}\n",
+    "\n",
+    "\n",
+    "gsExtC = GridSearchCV(ExtC,param_grid = ex_param_grid, cv=kfold, scoring=\"accuracy\", n_jobs= 4, verbose = 1)\n",
+    "\n",
+    "gsExtC.fit(X_train,Y_train)\n",
+    "\n",
+    "ExtC_best = gsExtC.best_estimator_\n",
+    "\n",
+    "# Best score\n",
+    "gsExtC.best_score_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fitting 10 folds for each of 54 candidates, totalling 540 fits\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Using backend LokyBackend with 4 concurrent workers.\n",
+      "[Parallel(n_jobs=4)]: Done  42 tasks      | elapsed:    8.2s\n",
+      "[Parallel(n_jobs=4)]: Done 192 tasks      | elapsed:   31.5s\n",
+      "[Parallel(n_jobs=4)]: Done 442 tasks      | elapsed:  1.2min\n",
+      "[Parallel(n_jobs=4)]: Done 540 out of 540 | elapsed:  1.5min finished\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0.8372908863920099"
+      ]
+     },
+     "execution_count": 25,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "RFC = RandomForestClassifier()\n",
+    "\n",
+    "\n",
+    "## Search grid for optimal parameters\n",
+    "rf_param_grid = {\"max_depth\": [None],\n",
+    "              \"max_features\": [1, 3, 10],\n",
+    "              \"min_samples_split\": [2, 3, 10],\n",
+    "              \"min_samples_leaf\": [1, 3, 10],\n",
+    "              \"bootstrap\": [False],\n",
+    "              \"n_estimators\" :[100,300],\n",
+    "              \"criterion\": [\"gini\"]}\n",
+    "\n",
+    "\n",
+    "gsRFC = GridSearchCV(RFC,param_grid = rf_param_grid, cv=kfold, scoring=\"accuracy\", n_jobs= 4, verbose = 1)\n",
+    "\n",
+    "gsRFC.fit(X_train,Y_train)\n",
+    "\n",
+    "RFC_best = gsRFC.best_estimator_\n",
+    "\n",
+    "# Best score\n",
+    "gsRFC.best_score_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Using backend LokyBackend with 4 concurrent workers.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fitting 10 folds for each of 72 candidates, totalling 720 fits\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Done  42 tasks      | elapsed:    3.8s\n",
+      "[Parallel(n_jobs=4)]: Done 192 tasks      | elapsed:   16.0s\n",
+      "[Parallel(n_jobs=4)]: Done 442 tasks      | elapsed:   36.8s\n",
+      "[Parallel(n_jobs=4)]: Done 720 out of 720 | elapsed:  1.0min finished\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0.8339200998751559"
+      ]
+     },
+     "execution_count": 26,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "GBC = GradientBoostingClassifier()\n",
+    "gb_param_grid = {'loss' : [\"deviance\"],\n",
+    "              'n_estimators' : [100,200,300],\n",
+    "              'learning_rate': [0.1, 0.05, 0.01],\n",
+    "              'max_depth': [4, 8],\n",
+    "              'min_samples_leaf': [100,150],\n",
+    "              'max_features': [0.3, 0.1] \n",
+    "              }\n",
+    "\n",
+    "gsGBC = GridSearchCV(GBC,param_grid = gb_param_grid, cv=kfold, scoring=\"accuracy\", n_jobs= 4, verbose = 1)\n",
+    "\n",
+    "gsGBC.fit(X_train,Y_train)\n",
+    "\n",
+    "GBC_best = gsGBC.best_estimator_\n",
+    "\n",
+    "# Best score\n",
+    "gsGBC.best_score_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fitting 10 folds for each of 28 candidates, totalling 280 fits\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[Parallel(n_jobs=4)]: Using backend LokyBackend with 4 concurrent workers.\n",
+      "[Parallel(n_jobs=4)]: Done  42 tasks      | elapsed:    3.9s\n",
+      "[Parallel(n_jobs=4)]: Done 192 tasks      | elapsed:   36.1s\n",
+      "[Parallel(n_jobs=4)]: Done 280 out of 280 | elapsed:  1.2min finished\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0.8384019975031209"
+      ]
+     },
+     "execution_count": 27,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "SVMC = SVC(probability=True)\n",
+    "svc_param_grid = {'kernel': ['rbf'], \n",
+    "                  'gamma': [ 0.001, 0.01, 0.1, 1],\n",
+    "                  'C': [1, 10, 50, 100,200,300, 1000]}\n",
+    "\n",
+    "gsSVMC = GridSearchCV(SVMC,param_grid = svc_param_grid, cv=kfold, scoring=\"accuracy\", n_jobs= 4, verbose = 1)\n",
+    "\n",
+    "gsSVMC.fit(X_train,Y_train)\n",
+    "\n",
+    "SVMC_best = gsSVMC.best_estimator_\n",
+    "\n",
+    "# Best score\n",
+    "gsSVMC.best_score_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.9326599326599326"
+      ]
+     },
+     "execution_count": 28,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "classifier = MLPClassifier(hidden_layer_sizes=(128,64,64,32,16), max_iter=10000,activation = 'relu',solver='adam',random_state=1)\n",
+    "classifier.fit(X_train, Y_train)\n",
+    "classifier.score(X_train, Y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "votingC = VotingClassifier(estimators=[('rfc', RFC_best), ('extc', ExtC_best),\n",
+    "('svc', SVMC_best), ('gbc',GBC_best), ('mlpc',classifier), ('ada',ada_best)], voting='soft', n_jobs=4)\n",
+    "\n",
+    "votingC = votingC.fit(X_train, Y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "test_Survived = pd.Series(votingC.predict(test), name=\"Survived\")\n",
+    "\n",
+    "results = pd.concat([IDtest,test_Survived],axis=1)\n",
+    "\n",
+    "results.to_csv(\"ensemble_python5.csv\",index=False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.6"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
