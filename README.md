@@ -1,8 +1,15 @@
 # Titanic_survivor_project
 
-Attempted the starter Kaggle project with various implementations with two promising results:
-1. Ensemble classififer with soft voting
-2. Multi Layer Perecptron Classifier (large variance)
+Attempted the starter Kaggle project with various implementations with promising results for an ensmeble classifier model
+
+I tried the MLPC classifier however, it does not work well due to less quantity of data which causes high training performance but poor generalization. Tree based classifiers are more suitable for this problem and work better than other algorithms.
+Few of the classifiers used:
+1. XGBoost
+2. Randomised Forest Trees
+3. Decision Trees
+4. CatBoost
+
+The best performing classifier hyper-parameters were chosen by a grid search algroithm.
 
 I perfomed a lot of feature engineering for favourable results which included:
 1. Creating a new feature - family size.
