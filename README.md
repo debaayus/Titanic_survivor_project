@@ -11,8 +11,8 @@ Few of the classifiers used:
 
 The best performing classifier hyper-parameters were chosen by a grid search algroithm.
 
-I perfomed a lot of feature engineering for favourable results which included:
-1. Creating a new feature - family size.
+I perfomed feature engineering for favourable results which included:
+1. Created a new feature - family size.
 2. Converted few categories to one-hot-encoders.
 3. Used correlation tables to weed out certain features.
 4. Data imputation
